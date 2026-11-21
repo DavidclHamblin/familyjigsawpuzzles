@@ -384,3 +384,9 @@ th, td { text-align: left; padding: 14px 18px; border-bottom: 1px solid var(--li
 th { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 tbody tr:last-child td { border-bottom: 0; }
 .step:nth-child(4) { --sc: var(--grape); }
+.sub-h { font-size: clamp(22px, 2.6vw, 28px); margin: 40px 0 16px; }
+.woods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.wood-size { display: grid; gap: 6px; align-content: start; padding: 20px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); border-top: 6px solid #C99A6B; }
+.wood-size .price { font-size: 22px; }
+@media (max-width: 700px) { .woods { grid-template-columns: 1fr; } }
+[id] { scroll-margin-top: 84px; }

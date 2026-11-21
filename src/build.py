@@ -16,10 +16,9 @@ SITE = f"https://{DOMAIN}"
 data = json.loads(subprocess.check_output(["node", "-e", """
 global.window = {}; require(process.argv[1]); console.log(JSON.stringify(window.FJP));
 """, str(ROOT / "assets/js/data.js")]))
-CFG, SIZES, MATERIALS = data["config"], data["sizes"], data["materials"]
+CFG, SIZES, WOOD, MATERIALS = data["config"], data["sizes"], data["woodSizes"], data["materials"]
 TREATMENTS, BACKDROPS, REGIONS, GBP = data["treatments"], data["backdrops"], data["regions"], data["gbp"]
 DISCOUNT = CFG["foundingDiscount"]
-WOOD_SOON = CFG.get("woodSoon", True)
 
 
 def money(eur):
@@ -229,14 +228,13 @@ def size_card(s):
     # A small cut grid to show how fine the pieces are, drawn at the puzzle's real proportions.
     w, h = 120, round(120 * s["h"] / s["w"])
     cuts = jigsaw(min(cols, 12), min(rows, 10), w, h, seed=s["pieces"])[0]
-    wood = f'{money(s["wood"])}' if s["wood"] else "Not in wood"
     return f"""<article class="size" style="--sc:{s["color"]}">
 <svg class="size-pic" viewBox="0 0 {w} {h}" aria-hidden="true"><rect width="{w}" height="{h}" rx="4" fill="var(--sc)"/><path d="{cuts}" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="{1.6 if cols < 12 else 1}"/></svg>
 <p class="size-n">{s["pieces"]:,}<small> pieces</small></p>
 <p class="size-dim">{s["w"] / 10:g} × {s["h"] / 10:g} cm</p>
 <p class="size-who">{e(s["who"])}</p>
 <p class="muted small">{e(s["line"])}</p>
-<dl class="size-prices"><div><dt>Cardboard</dt><dd>{money(s["card"])}</dd></div><div><dt>Wood</dt><dd>{wood}</dd></div></dl>
+<dl class="size-prices"><div><dt>Cardboard</dt><dd>{money(s["card"])}</dd></div></dl>
 <a class="stage-cta" href="#join" data-want="{s["id"]}">Notify me &rarr;</a>
 </article>"""
 
@@ -259,11 +257,16 @@ def looks():
 </div></section>"""
 
 
+def wood_card(w):
+    return f"""<article class="wood-size"><p class="size-n">{e(w["name"])}</p><p class="size-dim">{w["w"] / 10:g} × {w["h"] / 10:g} cm</p>
+<p class="muted small">{e(w["line"])}</p><p class="price">{money(w["price"])}</p>
+<a class="stage-cta" href="#join" data-want="{w["id"]}" data-mat="wood">Notify me &rarr;</a></article>"""
+
+
 def materials():
     cards = []
     for m in MATERIALS:
-        soon = m["id"] == "wood" and WOOD_SOON
-        badge = '<span class="badge" style="background:var(--muted)">Coming soon after launch</span>' if soon else ""
+        badge = ""
         pts = "".join(f"<li>{e(p)}</li>" for p in m["points"])
         cards.append(f"""<article class="mat mat-{m["id"]}">{badge}
 <svg class="mat-pic" viewBox="0 0 120 80" aria-hidden="true">{MAT_SVG[m["id"]]}</svg>
@@ -271,6 +274,9 @@ def materials():
     return f"""<section id="materials" class="section" style="padding-top:0"><div class="wrap">
 <div class="sec-head"><p class="eyebrow">Cardboard or wood</p><h2>Two ways to make it</h2><p class="lede">Every puzzle is printed to order, one at a time, and posted to you or straight to the person you're giving it to.</p></div>
 <div class="mats">{"".join(cards)}</div>
+<h3 class="sub-h" id="wood">Wooden puzzle sizes</h3>
+<div class="woods">{"".join(wood_card(w) for w in WOOD)}</div>
+<p class="note">Wooden puzzles are made to order and take a little longer to reach you: allow 2 to 4 weeks.</p>
 </div></section>"""
 
 
@@ -287,7 +293,7 @@ FAQ = [
     ("What makes a good photo for a puzzle?", "A sharp, well-lit photo taken on a modern phone works well. Faces should be clear and not too small. For the cartoon looks and backdrops, a photo of people standing or sitting together is best. Busy, detailed pictures make the most fun puzzles, and big areas of plain sky make the hardest."),
     ("What are the looks?", "You can keep your photo as it is, or we draw it in one of our cartoon styles: Cartoon Splash, Painted Splash, Watercolour, Comic Pop or Storybook. They're the same styles families choose for our Family Board Books."),
     ("How do backdrops work?", "We draw your family into a new scene, such as the streets of Paris, a sunny beach, snowy mountains, a jungle or outer space. You see a free preview first and can try another backdrop before you order."),
-    ("Cardboard or wood?", "Cardboard puzzles have a glossy photo finish and come in a gift tin or box with your picture on the lid. Wooden puzzles are laser cut, have a warm matt print and some fun-shaped pieces, and last for years. Wood costs a little more."),
+    ("Cardboard or wood?", "Cardboard puzzles have a glossy photo finish, come in a gift tin with your picture on the lid, and are made in the UK in a few days. Wooden puzzles are laser cut from 3 mm wood, come in a keepsake box and last for years. They cost a little more and take 2 to 4 weeks to arrive."),
     ("Can you send it straight to the person it's for?", "Yes. Just enter their address at checkout. We never put prices in the parcel."),
     ("Where are my photos stored?", "In private, encrypted storage in the European Union, in Cloudflare's EU data centres. Before a photo leaves your phone or computer, we shrink it and remove hidden details such as where it was taken. Your photos are never published.", "faq-privacy"),
     ("How long do you keep my photos?", "Free previews are deleted after 14 days if you don't order. Original photos are deleted once your puzzle is printed. You can delete everything yourself at any time. We never use your photos for advertising or to train AI."),
@@ -300,19 +306,21 @@ def faq_html():
 
 
 def pricing():
-    rows = "".join(f'<tr><td><b>{s["pieces"]:,} pieces</b></td><td>{s["w"] / 10:g} × {s["h"] / 10:g} cm</td><td>{e(s["who"])}</td>'
-                   f'<td class="price">{money(s["card"])}</td><td class="price">{money(s["wood"]) if s["wood"] else "–"}</td></tr>' for s in SIZES)
-    wood_note = " Wooden puzzles arrive shortly after launch." if WOOD_SOON else ""
+    rows = "".join(f'<tr><td>Cardboard</td><td><b>{s["pieces"]:,} pieces</b></td><td>{s["w"] / 10:g} × {s["h"] / 10:g} cm</td><td>{e(s["who"])}</td>'
+                   f'<td class="price">{money(s["card"])}</td></tr>' for s in SIZES)
+    rows += "".join(f'<tr><td>Wood</td><td><b>{e(w["name"])}</b></td><td>{w["w"] / 10:g} × {w["h"] / 10:g} cm</td><td>All ages</td>'
+                    f'<td class="price">{money(w["price"])}</td></tr>' for w in WOOD)
     return f"""<section id="pricing" class="section" style="padding-top:0"><div class="wrap">
 <div class="sec-head"><p class="eyebrow">Pricing</p><h2>One price, every look included</h2><p class="lede">Your photo as it is, any cartoon look and any backdrop all cost the same. Founding families on our list get {DISCOUNT}% off their first puzzle.</p></div>
-<div class="table-wrap"><table><thead><tr><th>Pieces</th><th>Finished size</th><th>Good for</th><th>Cardboard</th><th>Wood</th></tr></thead><tbody>{rows}</tbody></table></div>
-<p class="note">Launch prices, to be confirmed before ordering opens. Delivery costs are shown at checkout.{wood_note}</p>
+<div class="table-wrap"><table><thead><tr><th>Material</th><th>Puzzle</th><th>Finished size</th><th>Good for</th><th>Price</th></tr></thead><tbody>{rows}</tbody></table></div>
+<p class="note">Launch prices, to be confirmed before ordering opens. Delivery costs are shown at checkout.</p>
 </div></section>"""
 
 
 def want_options():
     opts = ['<option value="">Not sure yet</option>']
-    opts += [f'<option value="{s["id"]}">{s["pieces"]:,} pieces ({s["w"] / 10:g} × {s["h"] / 10:g} cm)</option>' for s in SIZES]
+    opts += [f'<option value="{s["id"]}">Cardboard, {s["pieces"]:,} pieces ({s["w"] / 10:g} × {s["h"] / 10:g} cm)</option>' for s in SIZES]
+    opts += [f'<option value="{w["id"]}">Wood, {e(w["name"])} ({w["w"] / 10:g} × {w["h"] / 10:g} cm)</option>' for w in WOOD]
     return "".join(opts)
 
 
@@ -323,8 +331,7 @@ def join_band():
 <div style="display:grid;gap:14px"><p class="eyebrow" style="color:#CFCADE">Founding families</p><h2>Be first to puzzle, and get {DISCOUNT}% off</h2><p>Our first puzzles open for orders soon. Join the list and we'll email you a {DISCOUNT}% founding-family discount for your first puzzle.</p></div>
 <form class="form" data-signup="waitlist" novalidate>
 <div class="field"><label for="w-email" style="color:#fff">Email</label><div class="form-row"><input id="w-email" name="email" type="email" autocomplete="email" placeholder="name@example.com" required><button class="btn red" type="submit">Join the list</button></div></div>
-<div class="field"><label for="w-want" style="color:#fff">Which size?</label><select id="w-want" name="size">{want_options()}</select></div>
-<div class="field"><label for="w-mat" style="color:#fff">Cardboard or wood?</label><select id="w-mat" name="material"><option value="card">Cardboard</option><option value="wood">Wood</option><option value="unsure">Not sure yet</option></select></div>
+<div class="field"><label for="w-want" style="color:#fff">Which puzzle?</label><select id="w-want" name="size">{want_options()}</select></div>
 <div class="field"><label for="w-look" style="color:#fff">Which look?</label><select id="w-look" name="look">{looks}<option value="unsure">Not sure yet</option></select></div>
 <p class="form-msg" role="status" style="color:#fff"></p>
 </form></div></div></section>"""
@@ -345,7 +352,7 @@ def home():
 </div></section>
 
 <section id="sizes" class="section" style="padding-top:28px"><div class="wrap">
-<div class="sec-head"><p class="eyebrow">Sizes</p><h2>From 30 chunky pieces to 1,000</h2><p class="lede">Pick a size to suit who's doing it. Every size comes in cardboard, and most in wood too.</p></div>
+<div class="sec-head"><p class="eyebrow">Sizes</p><h2>From 30 chunky pieces to 1,000</h2><p class="lede">Pick a size to suit who's doing it. These are our cardboard puzzles; <a href="#wood">wooden puzzles</a> come in three sizes of their own.</p></div>
 <div class="sizes">{sizes}</div>
 </div></section>
 

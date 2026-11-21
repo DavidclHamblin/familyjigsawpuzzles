@@ -64,7 +64,7 @@
   function send(data) {
     if (!F.config.formEndpoint) return Promise.resolve(false);
     var body = Object.assign({
-      _subject: "Family Jigsaw Puzzles waitlist: " + (data.size || "any size") + ", " + (data.material || ""),
+      _subject: "Family Jigsaw Puzzles waitlist: " + (data.size || "not sure yet"),
       _template: "table",
       _replyto: data.email,
       site: "familyjigsawpuzzles.com",
